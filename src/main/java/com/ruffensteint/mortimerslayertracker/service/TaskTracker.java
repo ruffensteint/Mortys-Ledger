@@ -14,6 +14,8 @@ public class TaskTracker
 		SlayerTaskRecord activeTask = history.getActiveTask();
 		if (matches(activeTask, assignment))
 		{
+			activeTask.setModifierValue(assignment.getModifierValue());
+			activeTask.setModifierNegative(assignment.isModifierNegative());
 			assignmentVisible = true;
 			return false;
 		}
@@ -32,6 +34,8 @@ public class TaskTracker
 		task.setMonster(assignment.getMonster());
 		task.setAssignedAmount(assignment.getAssignedAmount());
 		task.setModifier(assignment.getModifier());
+		task.setModifierValue(assignment.getModifierValue());
+		task.setModifierNegative(assignment.isModifierNegative());
 		task.setStartSlayerXp(assignment.getSlayerXp());
 		history.addTask(task);
 		assignmentVisible = true;
@@ -52,6 +56,61 @@ public class TaskTracker
 		}
 
 		complete(activeTask, endSlayerXp);
+		return true;
+	}
+
+	public boolean recordSuperiorSpawn(SlayerHistory history)
+	{
+		SlayerTaskRecord activeTask = history.getActiveTask();
+		if (activeTask == null)
+		{
+			return false;
+		}
+		activeTask.incrementSuperiorCount();
+		return true;
+	}
+
+	public boolean recordClueDrop(SlayerHistory history, int quantity)
+	{
+		SlayerTaskRecord activeTask = history.getActiveTask();
+		if (activeTask == null || !activeTask.isClueModifier() || quantity <= 0)
+		{
+			return false;
+		}
+		activeTask.addClueDrops(quantity);
+		return true;
+	}
+
+	public boolean recordSuperiorLoot(SlayerHistory history, int itemId, String name, int quantity)
+	{
+		SlayerTaskRecord activeTask = history.getActiveTask();
+		if (activeTask == null || quantity <= 0)
+		{
+			return false;
+		}
+		activeTask.addSuperiorLoot(itemId, name, quantity);
+		return true;
+	}
+
+	public boolean updateSlayerXp(SlayerHistory history, int currentSlayerXp)
+	{
+		SlayerTaskRecord activeTask = history.getActiveTask();
+		if (activeTask == null || currentSlayerXp < activeTask.getStartSlayerXp())
+		{
+			return false;
+		}
+
+		int totalXp = currentSlayerXp - activeTask.getStartSlayerXp();
+		int baseXp = totalXp;
+		int bonusXp = 0;
+		if (activeTask.isSlayerXpModifier()
+			&& !activeTask.isModifierNegative()
+			&& activeTask.getModifierValue() > 0)
+		{
+			baseXp = Math.round(totalXp * 100.0f / (100 + activeTask.getModifierValue()));
+			bonusXp = totalXp - baseXp;
+		}
+		activeTask.setSlayerXpBreakdown(baseXp, bonusXp);
 		return true;
 	}
 

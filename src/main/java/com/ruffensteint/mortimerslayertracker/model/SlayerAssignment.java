@@ -7,13 +7,18 @@ public class SlayerAssignment
 	private final String monster;
 	private final int assignedAmount;
 	private final String modifier;
+	private final int modifierValue;
+	private final boolean modifierNegative;
 	private final int slayerXp;
 
-	public SlayerAssignment(String monster, int assignedAmount, String modifier, int slayerXp)
+	public SlayerAssignment(String monster, int assignedAmount, String modifier,
+		int modifierValue, boolean modifierNegative, int slayerXp)
 	{
 		this.monster = Objects.requireNonNull(monster);
 		this.assignedAmount = assignedAmount;
 		this.modifier = modifier == null ? "" : modifier;
+		this.modifierValue = modifierValue;
+		this.modifierNegative = modifierNegative;
 		this.slayerXp = slayerXp;
 	}
 
@@ -35,5 +40,15 @@ public class SlayerAssignment
 	public int getSlayerXp()
 	{
 		return slayerXp;
+	}
+
+	public int getModifierValue()
+	{
+		return modifierValue;
+	}
+
+	public boolean isModifierNegative()
+	{
+		return modifierNegative;
 	}
 }

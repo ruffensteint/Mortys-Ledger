@@ -6,6 +6,7 @@ import com.ruffensteint.mortimerslayertracker.model.SlayerHistory;
 import com.ruffensteint.mortimerslayertracker.parser.MortimerChatParser;
 import com.ruffensteint.mortimerslayertracker.service.HistoryStore;
 import com.ruffensteint.mortimerslayertracker.service.SlayerAssignmentReader;
+import com.ruffensteint.mortimerslayertracker.service.SuperiorNpc;
 import com.ruffensteint.mortimerslayertracker.service.TaskTracker;
 import java.io.IOException;
 import java.util.Optional;
@@ -20,12 +21,16 @@ import net.runelite.api.GameState;
 import net.runelite.api.Skill;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
+import net.runelite.api.events.StatChanged;
 import net.runelite.api.events.VarbitChanged;
 import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
+import net.runelite.client.events.ServerNpcLoot;
+import net.runelite.client.game.ItemManager;
+import net.runelite.client.game.ItemStack;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.util.Text;
@@ -38,6 +43,8 @@ import net.runelite.client.util.Text;
 )
 public class MortimerSlayerTrackerPlugin extends Plugin
 {
+	private static final String SUPERIOR_SPAWN_MESSAGE = "A superior foe has appeared...";
+
 	@Inject
 	private MortimerSlayerTrackerConfig config;
 
@@ -52,6 +59,9 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 
 	@Inject
 	private SlayerAssignmentReader assignmentReader;
+
+	@Inject
+	private ItemManager itemManager;
 
 	private final MortimerChatParser chatParser = new MortimerChatParser();
 	private final TaskTracker taskTracker = new TaskTracker();
@@ -118,12 +128,20 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 	@Subscribe
 	public void onChatMessage(ChatMessage event)
 	{
-		if (event.getType() != ChatMessageType.GAMEMESSAGE)
+		if (event.getType() != ChatMessageType.GAMEMESSAGE
+			&& event.getType() != ChatMessageType.SPAM)
 		{
 			return;
 		}
 
-		OptionalInt completedTaskCount = chatParser.parseCompletedTaskCount(Text.removeTags(event.getMessage()));
+		String message = Text.removeTags(event.getMessage());
+		if (SUPERIOR_SPAWN_MESSAGE.equals(message) && taskTracker.recordSuperiorSpawn(history))
+		{
+			queueSave(new SlayerHistory(history));
+			log.debug("Recorded superior spawn for active Mortimer assignment");
+		}
+
+		OptionalInt completedTaskCount = chatParser.parseCompletedTaskCount(message);
 		if (!completedTaskCount.isPresent())
 		{
 			return;
@@ -136,6 +154,51 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 		}
 		queueSave(new SlayerHistory(history));
 		log.debug("Recorded Mortimer completed task count: {}", completedTaskCount.getAsInt());
+	}
+
+	@Subscribe
+	public void onServerNpcLoot(ServerNpcLoot event)
+	{
+		if (!historyReady || history.getActiveTask() == null)
+		{
+			return;
+		}
+
+		boolean superior = SuperiorNpc.isSuperior(event.getComposition().getId());
+		boolean changed = false;
+		for (ItemStack item : event.getItems())
+		{
+			String itemName = itemManager.getItemComposition(item.getId()).getName();
+			if (superior)
+			{
+				changed |= taskTracker.recordSuperiorLoot(
+					history, item.getId(), itemName, item.getQuantity());
+			}
+			if (itemName.toLowerCase().startsWith("clue scroll"))
+			{
+				changed |= taskTracker.recordClueDrop(history, item.getQuantity());
+			}
+		}
+
+		if (changed)
+		{
+			queueSave(new SlayerHistory(history));
+		}
+	}
+
+	@Subscribe
+	public void onStatChanged(StatChanged event)
+	{
+		if (event.getSkill() != Skill.SLAYER || history.getActiveTask() == null)
+		{
+			return;
+		}
+
+		updateAssignment();
+		if (taskTracker.updateSlayerXp(history, event.getXp()))
+		{
+			queueSave(new SlayerHistory(history));
+		}
 	}
 
 	private void loadHistory()
@@ -176,7 +239,8 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 			return;
 		}
 
-		if (taskTracker.startAssignment(history, assignment.get()))
+		boolean started = taskTracker.startAssignment(history, assignment.get());
+		if (started)
 		{
 			queueSave(new SlayerHistory(history));
 			log.debug("Started Mortimer assignment #{}: {} x{}",

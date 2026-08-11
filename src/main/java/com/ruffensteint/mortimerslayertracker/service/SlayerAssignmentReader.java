@@ -24,7 +24,8 @@ public class SlayerAssignmentReader
 	{
 		int amount = client.getVarpValue(VarPlayerID.SLAYER_COUNT);
 		int modifierId = client.getVarbitValue(VarbitID.SLAYER_MODIFIER_ID);
-		if (amount <= 0 || modifierId <= 0)
+		int slayerXp = client.getSkillExperience(Skill.SLAYER);
+		if (amount <= 0 || modifierId <= 0 || slayerXp <= 0)
 		{
 			return Optional.empty();
 		}
@@ -38,9 +39,9 @@ public class SlayerAssignmentReader
 		int assignedAmount = client.getVarpValue(VarPlayerID.SLAYER_COUNT_ORIGINAL);
 		String modifier = readModifierName(modifierId).orElse("Modifier " + modifierId);
 		int modifierValue = client.getVarbitValue(VarbitID.SLAYER_MODIFIER_VALUE);
+		boolean negative = client.getVarbitValue(VarbitID.SLAYER_MODIFIER_NEGATIVE) == 1;
 		if (modifierValue > 0)
 		{
-			boolean negative = client.getVarbitValue(VarbitID.SLAYER_MODIFIER_NEGATIVE) == 1;
 			modifier += " (" + (negative ? "-" : "+") + modifierValue + ")";
 		}
 
@@ -48,7 +49,9 @@ public class SlayerAssignmentReader
 			taskName.get(),
 			assignedAmount > 0 ? assignedAmount : amount,
 			modifier,
-			client.getSkillExperience(Skill.SLAYER)));
+			modifierValue,
+			negative,
+			slayerXp));
 	}
 
 	private Optional<String> readTaskName()

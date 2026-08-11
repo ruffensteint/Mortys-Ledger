@@ -72,5 +72,9 @@ public class SlayerHistory
 		{
 			tasks = new ArrayList<>();
 		}
+		for (SlayerTaskRecord task : tasks)
+		{
+			task.normalize();
+		}
 	}
 }
