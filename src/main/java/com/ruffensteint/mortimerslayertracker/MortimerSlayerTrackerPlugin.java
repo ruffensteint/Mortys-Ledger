@@ -1,17 +1,28 @@
 package com.ruffensteint.mortimerslayertracker;
 
 import com.google.inject.Provides;
+import com.ruffensteint.mortimerslayertracker.model.SlayerAssignment;
 import com.ruffensteint.mortimerslayertracker.model.SlayerHistory;
 import com.ruffensteint.mortimerslayertracker.parser.MortimerChatParser;
 import com.ruffensteint.mortimerslayertracker.service.HistoryStore;
+import com.ruffensteint.mortimerslayertracker.service.SlayerAssignmentReader;
+import com.ruffensteint.mortimerslayertracker.service.TaskTracker;
 import java.io.IOException;
+import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import javax.inject.Inject;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
+import net.runelite.api.Client;
+import net.runelite.api.GameState;
+import net.runelite.api.Skill;
 import net.runelite.api.events.ChatMessage;
+import net.runelite.api.events.GameStateChanged;
+import net.runelite.api.events.VarbitChanged;
+import net.runelite.api.gameval.VarPlayerID;
+import net.runelite.api.gameval.VarbitID;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
@@ -31,20 +42,29 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 	private MortimerSlayerTrackerConfig config;
 
 	@Inject
+	private Client client;
+
+	@Inject
 	private ClientThread clientThread;
 
 	@Inject
 	private HistoryStore historyStore;
 
+	@Inject
+	private SlayerAssignmentReader assignmentReader;
+
 	private final MortimerChatParser chatParser = new MortimerChatParser();
+	private final TaskTracker taskTracker = new TaskTracker();
 	private ExecutorService persistenceExecutor;
 	private SlayerHistory history = new SlayerHistory();
 	private volatile boolean active;
+	private boolean historyReady;
 
 	@Override
 	protected void startUp()
 	{
 		active = true;
+		historyReady = false;
 		persistenceExecutor = Executors.newSingleThreadExecutor(r ->
 		{
 			Thread thread = new Thread(r, "mortimer-slayer-history");
@@ -65,7 +85,34 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 			persistenceExecutor = null;
 		}
 		history = new SlayerHistory();
+		historyReady = false;
 		log.debug("Mortimer Slayer Tracker stopped");
+	}
+
+	@Subscribe
+	public void onGameStateChanged(GameStateChanged event)
+	{
+		if (event.getGameState() == GameState.LOGGED_IN)
+		{
+			clientThread.invokeLater(this::updateAssignment);
+		}
+	}
+
+	@Subscribe
+	public void onVarbitChanged(VarbitChanged event)
+	{
+		int varpId = event.getVarpId();
+		int varbitId = event.getVarbitId();
+		if (varpId == VarPlayerID.SLAYER_COUNT
+			|| varpId == VarPlayerID.SLAYER_TARGET
+			|| varpId == VarPlayerID.SLAYER_COUNT_ORIGINAL
+			|| varbitId == VarbitID.SLAYER_TARGET_BOSSID
+			|| varbitId == VarbitID.SLAYER_MODIFIER_ID
+			|| varbitId == VarbitID.SLAYER_MODIFIER_VALUE
+			|| varbitId == VarbitID.SLAYER_MODIFIER_NEGATIVE)
+		{
+			clientThread.invokeLater(this::updateAssignment);
+		}
 	}
 
 	@Subscribe
@@ -83,6 +130,10 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 		}
 
 		history.setMortimerTaskCount(completedTaskCount.getAsInt());
+		if (taskTracker.completeAssignment(history, client.getSkillExperience(Skill.SLAYER)))
+		{
+			log.debug("Completed tracked Mortimer assignment");
+		}
 		queueSave(new SlayerHistory(history));
 		log.debug("Recorded Mortimer completed task count: {}", completedTaskCount.getAsInt());
 	}
@@ -99,13 +150,39 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 					loadedHistory.setMortimerTaskCount(Math.max(
 						loadedHistory.getMortimerTaskCount(), history.getMortimerTaskCount()));
 					history = loadedHistory;
+					historyReady = true;
 					log.debug("Loaded {} Mortimer Slayer task records", history.getTasks().size());
+					updateAssignment();
 				}
 			});
 		}
 		catch (IOException | RuntimeException ex)
 		{
 			log.debug("Unable to load Mortimer Slayer history", ex);
+		}
+	}
+
+	private void updateAssignment()
+	{
+		if (!active || !historyReady || client.getGameState() != GameState.LOGGED_IN)
+		{
+			return;
+		}
+
+		Optional<SlayerAssignment> assignment = assignmentReader.readMortimerAssignment();
+		if (!assignment.isPresent())
+		{
+			taskTracker.clearAssignment();
+			return;
+		}
+
+		if (taskTracker.startAssignment(history, assignment.get()))
+		{
+			queueSave(new SlayerHistory(history));
+			log.debug("Started Mortimer assignment #{}: {} x{}",
+				history.getMortimerTaskCount() + 1,
+				assignment.get().getMonster(),
+				assignment.get().getAssignedAmount());
 		}
 	}
 

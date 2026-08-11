@@ -49,6 +49,19 @@ public class SlayerHistory
 		tasks.add(task);
 	}
 
+	public SlayerTaskRecord getActiveTask()
+	{
+		for (int i = tasks.size() - 1; i >= 0; i--)
+		{
+			SlayerTaskRecord task = tasks.get(i);
+			if (!task.isCompleted())
+			{
+				return task;
+			}
+		}
+		return null;
+	}
+
 	public void normalize()
 	{
 		if (schemaVersion <= 0)
