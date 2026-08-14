@@ -3,6 +3,7 @@ package com.ruffensteint.mortimerslayertracker;
 import com.google.inject.Provides;
 import com.ruffensteint.mortimerslayertracker.model.SlayerAssignment;
 import com.ruffensteint.mortimerslayertracker.model.SlayerHistory;
+import com.ruffensteint.mortimerslayertracker.model.MonsterGearPreference;
 import com.ruffensteint.mortimerslayertracker.parser.MortimerChatParser;
 import com.ruffensteint.mortimerslayertracker.service.HistoryStore;
 import com.ruffensteint.mortimerslayertracker.service.DiscordWebhookClient;
@@ -10,15 +11,27 @@ import com.ruffensteint.mortimerslayertracker.service.SlayerAssignmentReader;
 import com.ruffensteint.mortimerslayertracker.service.SuperiorNpc;
 import com.ruffensteint.mortimerslayertracker.service.TaskTracker;
 import java.io.IOException;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
 import java.util.Optional;
 import java.util.OptionalInt;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import javax.inject.Inject;
+import javax.swing.SwingUtilities;
+import javax.swing.JOptionPane;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
+import net.runelite.api.EquipmentInventorySlot;
 import net.runelite.api.GameState;
+import net.runelite.api.Item;
+import net.runelite.api.ItemContainer;
 import net.runelite.api.Skill;
 import net.runelite.api.events.ChatMessage;
 import net.runelite.api.events.GameStateChanged;
@@ -26,6 +39,7 @@ import net.runelite.api.events.StatChanged;
 import net.runelite.api.events.VarbitChanged;
 import net.runelite.api.gameval.VarPlayerID;
 import net.runelite.api.gameval.VarbitID;
+import net.runelite.api.gameval.InventoryID;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
@@ -33,17 +47,22 @@ import net.runelite.client.events.ServerNpcLoot;
 import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.ItemStack;
+import net.runelite.client.game.SkillIconManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.ui.ClientToolbar;
+import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.util.Text;
+import net.runelite.client.util.ImageUtil;
 
 @Slf4j
 @PluginDescriptor(
-	name = "Mortimer Slayer Tracker",
-	description = "Tracks Mortimer Slayer assignments and Road to 99 progress",
+	name = "Morty's Ledger",
+	description = "Records Mortimer Slayer assignments, task history, gear notes, and Discord announcements",
 	tags = {"slayer", "mortimer", "tracker", "discord"}
 )
 public class MortimerSlayerTrackerPlugin extends Plugin
+	implements MortimerSlayerTrackerPanel.GearBadgeHandler
 {
 	private static final String SUPERIOR_SPAWN_MESSAGE = "A superior foe has appeared...";
 
@@ -68,12 +87,20 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 	@Inject
 	private DiscordWebhookClient discordWebhookClient;
 
+	@Inject
+	private ClientToolbar clientToolbar;
+
+	@Inject
+	private SkillIconManager skillIconManager;
+
 	private final MortimerChatParser chatParser = new MortimerChatParser();
 	private final TaskTracker taskTracker = new TaskTracker();
 	private ExecutorService persistenceExecutor;
 	private SlayerHistory history = new SlayerHistory();
 	private volatile boolean active;
 	private boolean historyReady;
+	private MortimerSlayerTrackerPanel panel;
+	private NavigationButton navigationButton;
 
 	@Override
 	protected void startUp()
@@ -87,13 +114,21 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 			return thread;
 		});
 		persistenceExecutor.execute(this::loadHistory);
-		log.debug("Mortimer Slayer Tracker started; Road to 99 display: {}", config.showRoadTo99());
+		SwingUtilities.invokeLater(this::initializePanel);
+		log.debug("Morty's Ledger started; Road to 99 display: {}", config.showRoadTo99());
 	}
 
 	@Override
 	protected void shutDown()
 	{
 		active = false;
+		NavigationButton button = navigationButton;
+		if (button != null)
+		{
+			SwingUtilities.invokeLater(() -> clientToolbar.removeNavigation(button));
+		}
+		navigationButton = null;
+		panel = null;
 		if (persistenceExecutor != null)
 		{
 			persistenceExecutor.shutdownNow();
@@ -101,7 +136,7 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 		}
 		history = new SlayerHistory();
 		historyReady = false;
-		log.debug("Mortimer Slayer Tracker stopped");
+		log.debug("Morty's Ledger stopped");
 	}
 
 	@Subscribe
@@ -170,6 +205,7 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 		if (taskTracker.completeAssignment(history, client.getSkillExperience(Skill.SLAYER)))
 		{
 			log.debug("Completed tracked Mortimer assignment");
+			refreshPanel();
 			if (config.discordWebhookEnabled())
 			{
 				discordWebhookClient.sendTaskCompleted(
@@ -242,6 +278,7 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 					history = loadedHistory;
 					historyReady = true;
 					log.debug("Loaded {} Mortimer Slayer task records", history.getTasks().size());
+					refreshPanel();
 					updateAssignment();
 				}
 			});
@@ -285,6 +322,186 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 	private String getPlayerName()
 	{
 		return client.getLocalPlayer() == null ? null : client.getLocalPlayer().getName();
+	}
+
+	private void initializePanel()
+	{
+		if (!active)
+		{
+			return;
+		}
+		panel = new MortimerSlayerTrackerPanel(itemManager, skillIconManager, discordWebhookClient, this);
+		navigationButton = NavigationButton.builder()
+			.tooltip("Morty's Ledger")
+			.icon(loadPanelIcon())
+			.priority(6)
+			.panel(panel)
+			.build();
+		clientToolbar.addNavigation(navigationButton);
+		panel.updateHistory(history);
+	}
+
+	private BufferedImage loadPanelIcon()
+	{
+		BufferedImage source = ImageUtil.loadImageResource(
+			MortimerSlayerTrackerPlugin.class, "panel-icon.png");
+		BufferedImage icon = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+		Graphics2D graphics = icon.createGraphics();
+		graphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION,
+			RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+		double scale = Math.min(16.0 / source.getWidth(), 16.0 / source.getHeight());
+		int width = Math.max(1, (int) Math.round(source.getWidth() * scale));
+		int height = Math.max(1, (int) Math.round(source.getHeight() * scale));
+		graphics.drawImage(source, (16 - width) / 2, (16 - height) / 2, width, height, null);
+		graphics.dispose();
+		return icon;
+	}
+
+	private void refreshPanel()
+	{
+		MortimerSlayerTrackerPanel currentPanel = panel;
+		if (currentPanel != null)
+		{
+			currentPanel.updateHistory(history);
+		}
+	}
+
+	@Override
+	public void captureWeapon(String monster)
+	{
+		captureEquipmentBadge(monster, EquipmentInventorySlot.WEAPON, true);
+	}
+
+	@Override
+	public void captureShield(String monster)
+	{
+		captureEquipmentBadge(monster, EquipmentInventorySlot.SHIELD, false);
+	}
+
+	@Override
+	public void clearWeapon(String monster)
+	{
+		updateGearPreference(monster, -1, true);
+	}
+
+	@Override
+	public void clearShield(String monster)
+	{
+		updateGearPreference(monster, -1, false);
+	}
+
+	@Override
+	public void chooseSlayerItem(String monster)
+	{
+		clientThread.invokeLater(() ->
+		{
+			Map<Integer, String> availableItems = new LinkedHashMap<>();
+			addItemChoices(availableItems, client.getItemContainer(InventoryID.INV));
+			addItemChoices(availableItems, client.getItemContainer(InventoryID.WORN));
+			List<MortimerSlayerTrackerPanel.ItemChoice> choices = new ArrayList<>();
+			for (Map.Entry<Integer, String> entry : availableItems.entrySet())
+			{
+				choices.add(new MortimerSlayerTrackerPanel.ItemChoice(entry.getKey(), entry.getValue()));
+			}
+			MortimerSlayerTrackerPanel currentPanel = panel;
+			if (currentPanel != null)
+			{
+				currentPanel.chooseSlayerItem(monster, choices);
+			}
+		});
+	}
+
+	@Override
+	public void setSlayerItem(String monster, int itemId)
+	{
+		clientThread.invokeLater(() ->
+		{
+			history.setSlayerItemPreference(monster, itemId);
+			queueSave(new SlayerHistory(history));
+			refreshPanel();
+		});
+	}
+
+	@Override
+	public void clearSlayerItem(String monster)
+	{
+		setSlayerItem(monster, -1);
+	}
+
+	@Override
+	public void toggleCannon(String monster)
+	{
+		clientThread.invokeLater(() ->
+		{
+			MonsterGearPreference preference = history.getGearPreference(monster);
+			boolean enabled = preference != null && preference.isCannonEnabled();
+			history.setCannonPreference(monster, !enabled);
+			queueSave(new SlayerHistory(history));
+			refreshPanel();
+		});
+	}
+
+	private void addItemChoices(Map<Integer, String> choices, ItemContainer container)
+	{
+		if (container == null)
+		{
+			return;
+		}
+		for (Item item : container.getItems())
+		{
+			if (item.getId() > 0)
+			{
+				choices.putIfAbsent(item.getId(), itemManager.getItemComposition(item.getId()).getName());
+			}
+		}
+	}
+
+	private void captureEquipmentBadge(String monster, EquipmentInventorySlot slot, boolean weapon)
+	{
+		clientThread.invokeLater(() ->
+		{
+			ItemContainer equipment = client.getItemContainer(InventoryID.WORN);
+			Item item = equipment == null ? null : equipment.getItem(slot.getSlotIdx());
+			if (item == null || item.getId() <= 0)
+			{
+				showPanelMessage("Equip a " + (weapon ? "weapon" : "shield") + " first, then try again.");
+				return;
+			}
+			updateGearPreferenceNow(monster, item.getId(), weapon);
+		});
+	}
+
+	private void updateGearPreference(String monster, int itemId, boolean weapon)
+	{
+		clientThread.invokeLater(() -> updateGearPreferenceNow(monster, itemId, weapon));
+	}
+
+	private void updateGearPreferenceNow(String monster, int itemId, boolean weapon)
+	{
+		if (!historyReady || monster == null || monster.trim().isEmpty())
+		{
+			return;
+		}
+		if (weapon)
+		{
+			history.setWeaponPreference(monster, itemId);
+		}
+		else
+		{
+			history.setShieldPreference(monster, itemId);
+		}
+		queueSave(new SlayerHistory(history));
+		refreshPanel();
+	}
+
+	private void showPanelMessage(String message)
+	{
+		MortimerSlayerTrackerPanel currentPanel = panel;
+		if (currentPanel != null)
+		{
+			SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(
+				currentPanel, message, "Morty's Ledger", JOptionPane.INFORMATION_MESSAGE));
+		}
 	}
 
 	private void queueSave(SlayerHistory snapshot)

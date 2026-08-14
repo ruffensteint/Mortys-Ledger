@@ -5,6 +5,8 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.ruffensteint.mortimerslayertracker.model.LootItemRecord;
 import com.ruffensteint.mortimerslayertracker.model.SlayerTaskRecord;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -13,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
+import javax.imageio.ImageIO;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +42,7 @@ public class DiscordWebhookClient
 	private final OkHttpClient httpClient;
 	private final Gson gson;
 	private final Map<String, String> thumbnailCache = new ConcurrentHashMap<>();
+	private final Map<String, byte[]> thumbnailBytesCache = new ConcurrentHashMap<>();
 
 	@Inject
 	public DiscordWebhookClient(OkHttpClient httpClient, Gson gson)
@@ -167,8 +171,65 @@ public class DiscordWebhookClient
 
 	private void fetchThumbnailAndSend(HttpUrl webhookUrl, Embed embed)
 	{
+		loadThumbnailBytes(embed.thumbnail.url, image ->
+		{
+			if (image == null)
+			{
+				embed.thumbnail = null;
+				sendRequest(webhookUrl, createJsonBody(embed));
+				return;
+			}
+
+			embed.thumbnail = new Thumbnail("attachment://monster.png");
+			MultipartBody body = new MultipartBody.Builder()
+				.setType(MultipartBody.FORM)
+				.addFormDataPart("payload_json", gson.toJson(createPayload(embed)))
+				.addFormDataPart("files[0]", "monster.png",
+					RequestBody.create(MediaType.get("image/png"), image))
+				.build();
+			sendRequest(webhookUrl, body);
+		});
+	}
+
+	public void loadMonsterThumbnail(String monster, Consumer<BufferedImage> callback)
+	{
+		resolveThumbnail(monster, thumbnailUrl ->
+		{
+			if (thumbnailUrl == null)
+			{
+				callback.accept(null);
+				return;
+			}
+			loadThumbnailBytes(thumbnailUrl, image ->
+			{
+				if (image == null)
+				{
+					callback.accept(null);
+					return;
+				}
+				try
+				{
+					callback.accept(ImageIO.read(new ByteArrayInputStream(image)));
+				}
+				catch (IOException ex)
+				{
+					log.debug("Unable to decode monster thumbnail", ex);
+					callback.accept(null);
+				}
+			});
+		});
+	}
+
+	private void loadThumbnailBytes(String thumbnailUrl, Consumer<byte[]> callback)
+	{
+		byte[] cached = thumbnailBytesCache.get(thumbnailUrl);
+		if (cached != null)
+		{
+			callback.accept(cached);
+			return;
+		}
 		Request imageRequest = new Request.Builder()
-			.url(embed.thumbnail.url)
+			.url(thumbnailUrl)
 			.header("User-Agent", WIKI_USER_AGENT)
 			.build();
 		httpClient.newCall(imageRequest).enqueue(new Callback()
@@ -177,8 +238,7 @@ public class DiscordWebhookClient
 			public void onFailure(Call call, IOException ex)
 			{
 				log.debug("Unable to fetch monster thumbnail", ex);
-				embed.thumbnail = null;
-				sendRequest(webhookUrl, createJsonBody(embed));
+				callback.accept(null);
 			}
 
 			@Override
@@ -191,28 +251,17 @@ public class DiscordWebhookClient
 						|| contentLength > MAX_THUMBNAIL_BYTES)
 					{
 						log.debug("Monster thumbnail request failed with HTTP {}", response.code());
-						embed.thumbnail = null;
-						sendRequest(webhookUrl, createJsonBody(embed));
+						callback.accept(null);
 						return;
 					}
-
 					byte[] image = response.body().bytes();
 					if (image.length > MAX_THUMBNAIL_BYTES)
 					{
-						embed.thumbnail = null;
-						sendRequest(webhookUrl, createJsonBody(embed));
+						callback.accept(null);
 						return;
 					}
-
-					embed.thumbnail = new Thumbnail("attachment://monster.png");
-					MediaType imageType = response.body().contentType();
-					MultipartBody body = new MultipartBody.Builder()
-						.setType(MultipartBody.FORM)
-						.addFormDataPart("payload_json", gson.toJson(createPayload(embed)))
-						.addFormDataPart("files[0]", "monster.png",
-							RequestBody.create(imageType == null ? MediaType.get("image/png") : imageType, image))
-						.build();
-					sendRequest(webhookUrl, body);
+					thumbnailBytesCache.put(thumbnailUrl, image);
+					callback.accept(image);
 				}
 			}
 		});

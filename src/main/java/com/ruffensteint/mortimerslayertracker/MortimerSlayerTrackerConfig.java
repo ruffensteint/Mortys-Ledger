@@ -14,7 +14,7 @@ public interface MortimerSlayerTrackerConfig extends Config
 	@ConfigItem(
 		keyName = "showRoadTo99",
 		name = "Show Road to 99",
-		description = "Show Road to 99 progress in Mortimer Slayer reports"
+		description = "Show Road to 99 progress in Morty's Ledger reports"
 	)
 	default boolean showRoadTo99()
 	{

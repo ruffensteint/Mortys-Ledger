@@ -116,6 +116,11 @@ public class SlayerTaskRecord
 		return modifier != null && modifier.toLowerCase().contains("slayer xp");
 	}
 
+	public boolean isSlayerPointsModifier()
+	{
+		return modifier != null && modifier.toLowerCase().contains("slayer points");
+	}
+
 	public int getStartSlayerXp()
 	{
 		return startSlayerXp;

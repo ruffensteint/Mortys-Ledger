@@ -1,4 +1,4 @@
-# Mortimer Slayer Tracker
+# Morty's Ledger
 
 A RuneLite plugin for automatically tracking Mortimer Slayer assignments and
 publishing task announcements to Discord.
@@ -23,7 +23,7 @@ Discord integration is disabled by default.
 1. In Discord, open the destination channel's settings.
 2. Select **Integrations**, then **Webhooks**.
 3. Create a webhook, choose its name and avatar, and copy its webhook URL.
-4. In RuneLite, open **Configuration** and select **Mortimer Slayer Tracker**.
+4. In RuneLite, open **Configuration** and select **Morty's Ledger**.
 5. Paste the URL into **Discord webhook URL**.
 6. Optionally customize **New task title** and **Completed task title**.
 7. Enable **Discord webhook** and accept RuneLite's third-party warning.
