@@ -1,24 +1,53 @@
 # Mortimer Slayer Tracker
 
 A RuneLite plugin for automatically tracking Mortimer Slayer assignments and
-publishing a configurable Road to 99 Slayer report to Discord.
+publishing task announcements to Discord.
 
-## Planned V1
+## Features
 
-- Detect new Mortimer Slayer assignments.
-- Record task monster, assigned amount, modifier, and starting Slayer XP.
-- Calculate Slayer XP gained when a task completes.
-- Count superior spawns and clue-scroll drops.
-- Parse Mortimer completion messages for the completed-task count.
-- Store task history locally under the RuneLite directory.
-- Optionally post a formatted Discord report when the next task is assigned.
+- Detects new Mortimer Slayer assignments and completed tasks.
+- Records the task number, monster, assigned amount, modifier, and Slayer XP.
+- Splits modifier-boosted Slayer XP into base and bonus XP.
+- Counts superior spawns and records their dropped items.
+- Counts clue-scroll drops only when the assignment has a clue modifier.
+- Stores task history in `.runelite/mortimer-slayer-tracker/task-history.json`.
+- Optionally posts new-task and completion embeds to Discord.
+- Includes the character name and an automatically resolved OSRS Wiki monster
+  thumbnail in Discord posts.
+- Supports customizable new-task and completion announcement titles.
 
-Discord integration will be disabled by default and will clearly disclose that
-enabling it sends report data to the configured third-party webhook.
+## Discord Webhook Setup
+
+Discord integration is disabled by default.
+
+1. In Discord, open the destination channel's settings.
+2. Select **Integrations**, then **Webhooks**.
+3. Create a webhook, choose its name and avatar, and copy its webhook URL.
+4. In RuneLite, open **Configuration** and select **Mortimer Slayer Tracker**.
+5. Paste the URL into **Discord webhook URL**.
+6. Optionally customize **New task title** and **Completed task title**.
+7. Enable **Discord webhook** and accept RuneLite's third-party warning.
+
+Enabling the webhook immediately posts the currently active task, when one is
+available. The plugin uses the webhook's configured Discord name and avatar.
+It posts task data only to the supplied Discord webhook. Monster thumbnails are
+resolved and downloaded from the OSRS Wiki, then attached to the Discord post.
+Both services will see the source IP address of their respective HTTPS requests.
+
+If a thumbnail cannot be resolved or downloaded, the text announcement is still
+sent normally.
+
+## Local History
+
+Task history is stored beneath RuneLite's data directory:
+
+```text
+.runelite/mortimer-slayer-tracker/task-history.json
+```
 
 ## Development
 
-Build and test the plugin on Windows with:
+This project targets Java 11. Build and test it on Windows with:
 
 ```powershell
 .\gradlew.bat test
@@ -29,3 +58,9 @@ Launch a developer RuneLite client with:
 ```powershell
 .\gradlew.bat run
 ```
+
+Windows users can also double-click `launch-dev-client.cmd`. It launches the
+development client from the repository using the JDK configured by `JAVA_HOME`.
+
+The Gradle terminal remains open and may show the `:run` task below 100% while
+RuneLite is running. This is expected; the task finishes when the client closes.

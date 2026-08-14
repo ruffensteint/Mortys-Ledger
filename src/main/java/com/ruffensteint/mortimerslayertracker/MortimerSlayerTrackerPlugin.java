@@ -5,6 +5,7 @@ import com.ruffensteint.mortimerslayertracker.model.SlayerAssignment;
 import com.ruffensteint.mortimerslayertracker.model.SlayerHistory;
 import com.ruffensteint.mortimerslayertracker.parser.MortimerChatParser;
 import com.ruffensteint.mortimerslayertracker.service.HistoryStore;
+import com.ruffensteint.mortimerslayertracker.service.DiscordWebhookClient;
 import com.ruffensteint.mortimerslayertracker.service.SlayerAssignmentReader;
 import com.ruffensteint.mortimerslayertracker.service.SuperiorNpc;
 import com.ruffensteint.mortimerslayertracker.service.TaskTracker;
@@ -29,6 +30,7 @@ import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ServerNpcLoot;
+import net.runelite.client.events.ConfigChanged;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.ItemStack;
 import net.runelite.client.plugins.Plugin;
@@ -62,6 +64,9 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 
 	@Inject
 	private ItemManager itemManager;
+
+	@Inject
+	private DiscordWebhookClient discordWebhookClient;
 
 	private final MortimerChatParser chatParser = new MortimerChatParser();
 	private final TaskTracker taskTracker = new TaskTracker();
@@ -109,6 +114,20 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 	}
 
 	@Subscribe
+	public void onConfigChanged(ConfigChanged event)
+	{
+		if (MortimerSlayerTrackerConfig.GROUP.equals(event.getGroup())
+			&& MortimerSlayerTrackerConfig.DISCORD_WEBHOOK_ENABLED_KEY.equals(event.getKey())
+			&& config.discordWebhookEnabled()
+			&& historyReady
+			&& history.getActiveTask() != null)
+		{
+			discordWebhookClient.sendTaskStarted(
+				config.discordWebhookUrl(), config.discordNewTaskTitle(), getPlayerName(), history.getActiveTask());
+		}
+	}
+
+	@Subscribe
 	public void onVarbitChanged(VarbitChanged event)
 	{
 		int varpId = event.getVarpId();
@@ -151,6 +170,14 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 		if (taskTracker.completeAssignment(history, client.getSkillExperience(Skill.SLAYER)))
 		{
 			log.debug("Completed tracked Mortimer assignment");
+			if (config.discordWebhookEnabled())
+			{
+				discordWebhookClient.sendTaskCompleted(
+					config.discordWebhookUrl(),
+					config.discordCompletedTaskTitle(),
+					getPlayerName(),
+					history.getTasks().get(history.getTasks().size() - 1));
+			}
 		}
 		queueSave(new SlayerHistory(history));
 		log.debug("Recorded Mortimer completed task count: {}", completedTaskCount.getAsInt());
@@ -243,11 +270,21 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 		if (started)
 		{
 			queueSave(new SlayerHistory(history));
+			if (config.discordWebhookEnabled())
+			{
+				discordWebhookClient.sendTaskStarted(
+					config.discordWebhookUrl(), config.discordNewTaskTitle(), getPlayerName(), history.getActiveTask());
+			}
 			log.debug("Started Mortimer assignment #{}: {} x{}",
 				history.getMortimerTaskCount() + 1,
 				assignment.get().getMonster(),
 				assignment.get().getAssignedAmount());
 		}
+	}
+
+	private String getPlayerName()
+	{
+		return client.getLocalPlayer() == null ? null : client.getLocalPlayer().getName();
 	}
 
 	private void queueSave(SlayerHistory snapshot)
