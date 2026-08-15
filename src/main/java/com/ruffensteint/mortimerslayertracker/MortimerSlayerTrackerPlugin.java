@@ -197,6 +197,7 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 		if (SUPERIOR_SPAWN_MESSAGE.equals(message) && taskTracker.recordSuperiorSpawn(history))
 		{
 			queueSave(new SlayerHistory(history));
+			refreshCurrentPanel();
 			log.debug("Recorded superior spawn for active Mortimer assignment");
 		}
 
@@ -251,6 +252,7 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 		if (changed)
 		{
 			queueSave(new SlayerHistory(history));
+			refreshCurrentPanel();
 		}
 	}
 
@@ -266,6 +268,7 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 		if (taskTracker.updateSlayerXp(history, event.getXp()))
 		{
 			queueSave(new SlayerHistory(history));
+			refreshCurrentPanel();
 		}
 	}
 
@@ -312,6 +315,7 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 		if (started)
 		{
 			queueSave(new SlayerHistory(history));
+			refreshPanel();
 			if (config.discordWebhookEnabled())
 			{
 				discordWebhookClient.sendTaskStarted(
@@ -371,6 +375,15 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 		}
 	}
 
+	private void refreshCurrentPanel()
+	{
+		MortimerSlayerTrackerPanel currentPanel = panel;
+		if (currentPanel != null)
+		{
+			currentPanel.updateCurrentTask(history, config.wikiThumbnailsEnabled());
+		}
+	}
+
 	@Override
 	public void captureWeapon(String monster)
 	{
@@ -401,8 +414,8 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 		clientThread.invokeLater(() ->
 		{
 			Map<Integer, String> availableItems = new LinkedHashMap<>();
-			addItemChoices(availableItems, client.getItemContainer(InventoryID.INV));
-			addItemChoices(availableItems, client.getItemContainer(InventoryID.WORN));
+			addItemChoices(availableItems, client.getItemContainer(InventoryID.INV), "Inventory");
+			addItemChoices(availableItems, client.getItemContainer(InventoryID.WORN), "Equipped");
 			List<MortimerSlayerTrackerPanel.ItemChoice> choices = new ArrayList<>();
 			for (Map.Entry<Integer, String> entry : availableItems.entrySet())
 			{
@@ -446,7 +459,7 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 		});
 	}
 
-	private void addItemChoices(Map<Integer, String> choices, ItemContainer container)
+	private void addItemChoices(Map<Integer, String> choices, ItemContainer container, String source)
 	{
 		if (container == null)
 		{
@@ -456,7 +469,8 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 		{
 			if (item.getId() > 0)
 			{
-				choices.putIfAbsent(item.getId(), itemManager.getItemComposition(item.getId()).getName());
+				String name = itemManager.getItemComposition(item.getId()).getName();
+				choices.putIfAbsent(item.getId(), name + " (" + source + ")");
 			}
 		}
 	}
