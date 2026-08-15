@@ -9,6 +9,7 @@ public interface MortimerSlayerTrackerConfig extends Config
 {
 	String GROUP = "mortimerSlayerTracker";
 	String DISCORD_WEBHOOK_ENABLED_KEY = "discordWebhookEnabled";
+	String WIKI_THUMBNAILS_ENABLED_KEY = "wikiThumbnailsEnabled";
 	String THIRD_PARTY_WARNING = "This feature submits your IP address to a 3rd-party server not controlled or verified by RuneLite developers";
 
 	@ConfigItem(
@@ -19,6 +20,17 @@ public interface MortimerSlayerTrackerConfig extends Config
 	default boolean showRoadTo99()
 	{
 		return true;
+	}
+
+	@ConfigItem(
+		keyName = WIKI_THUMBNAILS_ENABLED_KEY,
+		name = "Enable Wiki thumbnails",
+		description = "Download monster thumbnails from the OSRS Wiki for task-history cards",
+		warning = THIRD_PARTY_WARNING
+	)
+	default boolean wikiThumbnailsEnabled()
+	{
+		return false;
 	}
 
 	@ConfigItem(
@@ -34,8 +46,8 @@ public interface MortimerSlayerTrackerConfig extends Config
 
 	@ConfigItem(
 		keyName = "discordWebhookUrl",
-		name = "Discord webhook URL",
-		description = "Webhook URL copied from the target Discord channel",
+		name = "Discord webhook URLs",
+		description = "One or more Discord webhook URLs separated by commas",
 		secret = true
 	)
 	default String discordWebhookUrl()

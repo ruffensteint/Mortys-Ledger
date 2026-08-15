@@ -94,13 +94,13 @@ public class MortimerSlayerTrackerPanel extends PluginPanel
 		add(scrollPane, BorderLayout.CENTER);
 	}
 
-	public void updateHistory(SlayerHistory history)
+	public void updateHistory(SlayerHistory history, boolean thumbnailsEnabled)
 	{
 		SlayerHistory snapshot = new SlayerHistory(history);
-		SwingUtilities.invokeLater(() -> rebuild(snapshot));
+		SwingUtilities.invokeLater(() -> rebuild(snapshot, thumbnailsEnabled));
 	}
 
-	private void rebuild(SlayerHistory history)
+	private void rebuild(SlayerHistory history, boolean thumbnailsEnabled)
 	{
 		taskList.removeAll();
 		List<SlayerTaskRecord> completed = new ArrayList<>();
@@ -134,7 +134,7 @@ public class MortimerSlayerTrackerPanel extends PluginPanel
 					? itemManager.getImage(preference.getSlayerItemId()) : null;
 				TaskCard card = new TaskCard(task, modifierIcon(task), modifierMarker(task),
 					weaponIcon, shieldIcon, slayerItemIcon, cannonIcon,
-					preference != null && preference.isCannonEnabled(), gearBadgeHandler);
+					preference != null && preference.isCannonEnabled(), thumbnailsEnabled, gearBadgeHandler);
 				if (weaponIcon != null)
 				{
 					weaponIcon.onLoaded(card::repaint);
@@ -149,7 +149,10 @@ public class MortimerSlayerTrackerPanel extends PluginPanel
 				}
 				taskList.add(card);
 				taskList.add(Box.createRigidArea(new Dimension(0, CARD_GAP)));
-				loadMonsterImage(task.getMonster(), card);
+				if (thumbnailsEnabled)
+				{
+					loadMonsterImage(task.getMonster(), card);
+				}
 			}
 		}
 		taskList.revalidate();
@@ -245,11 +248,13 @@ public class MortimerSlayerTrackerPanel extends PluginPanel
 		private final BufferedImage cannonIcon;
 		private final boolean cannonEnabled;
 		private final GearBadgeHandler gearBadgeHandler;
+		private final boolean thumbnailsEnabled;
 		private BufferedImage monsterImage;
 
 		private TaskCard(SlayerTaskRecord task, BufferedImage modifierIcon, String modifierMarker,
 			BufferedImage weaponIcon, BufferedImage shieldIcon, BufferedImage slayerItemIcon,
-			BufferedImage cannonIcon, boolean cannonEnabled, GearBadgeHandler gearBadgeHandler)
+			BufferedImage cannonIcon, boolean cannonEnabled, boolean thumbnailsEnabled,
+			GearBadgeHandler gearBadgeHandler)
 		{
 			this.task = new SlayerTaskRecord(task);
 			this.modifierIcon = modifierIcon;
@@ -260,6 +265,7 @@ public class MortimerSlayerTrackerPanel extends PluginPanel
 			this.cannonIcon = cannonIcon;
 			this.cannonEnabled = cannonEnabled;
 			this.gearBadgeHandler = gearBadgeHandler;
+			this.thumbnailsEnabled = thumbnailsEnabled;
 			setOpaque(false);
 			setAlignmentX(LEFT_ALIGNMENT);
 			setPreferredSize(new Dimension(PluginPanel.PANEL_WIDTH - 22, CARD_HEIGHT));
@@ -325,7 +331,8 @@ public class MortimerSlayerTrackerPanel extends PluginPanel
 			{
 				g.setColor(ColorScheme.LIGHT_GRAY_COLOR);
 				g.setFont(getFont().deriveFont(Font.PLAIN, 12f));
-				drawCentered(g, "Loading image...", IMAGE_X, IMAGE_Y, imageWidth, IMAGE_HEIGHT);
+				drawCentered(g, thumbnailsEnabled ? "Loading image..." : "Wiki thumbnails disabled",
+					IMAGE_X, IMAGE_Y, imageWidth, IMAGE_HEIGHT);
 			}
 			g.setClip(null);
 

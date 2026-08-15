@@ -13,6 +13,8 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import javax.imageio.ImageIO;
@@ -84,10 +86,10 @@ public class DiscordWebhookClient
 
 	private void send(String webhookUrl, Embed embed, String monster)
 	{
-		HttpUrl url = parseDiscordWebhookUrl(webhookUrl);
-		if (url == null)
+		List<HttpUrl> urls = parseDiscordWebhookUrls(webhookUrl);
+		if (urls.isEmpty())
 		{
-			log.debug("Discord webhook URL is missing or invalid");
+			log.debug("Discord webhook URLs are missing or invalid");
 			return;
 		}
 
@@ -95,11 +97,14 @@ public class DiscordWebhookClient
 		{
 			if (thumbnailUrl == null)
 			{
-				sendRequest(url, createJsonBody(embed));
+				for (HttpUrl url : urls)
+				{
+					sendRequest(url, createJsonBody(embed));
+				}
 				return;
 			}
 			embed.thumbnail = new Thumbnail(thumbnailUrl);
-			fetchThumbnailAndSend(url, embed);
+			fetchThumbnailAndSend(urls, embed);
 		});
 	}
 
@@ -169,25 +174,31 @@ public class DiscordWebhookClient
 		});
 	}
 
-	private void fetchThumbnailAndSend(HttpUrl webhookUrl, Embed embed)
+	private void fetchThumbnailAndSend(List<HttpUrl> webhookUrls, Embed embed)
 	{
 		loadThumbnailBytes(embed.thumbnail.url, image ->
 		{
 			if (image == null)
 			{
 				embed.thumbnail = null;
-				sendRequest(webhookUrl, createJsonBody(embed));
+				for (HttpUrl webhookUrl : webhookUrls)
+				{
+					sendRequest(webhookUrl, createJsonBody(embed));
+				}
 				return;
 			}
 
 			embed.thumbnail = new Thumbnail("attachment://monster.png");
-			MultipartBody body = new MultipartBody.Builder()
-				.setType(MultipartBody.FORM)
-				.addFormDataPart("payload_json", gson.toJson(createPayload(embed)))
-				.addFormDataPart("files[0]", "monster.png",
-					RequestBody.create(MediaType.get("image/png"), image))
-				.build();
-			sendRequest(webhookUrl, body);
+			for (HttpUrl webhookUrl : webhookUrls)
+			{
+				MultipartBody body = new MultipartBody.Builder()
+					.setType(MultipartBody.FORM)
+					.addFormDataPart("payload_json", gson.toJson(createPayload(embed)))
+					.addFormDataPart("files[0]", "monster.png",
+						RequestBody.create(MediaType.get("image/png"), image))
+					.build();
+				sendRequest(webhookUrl, body);
+			}
 		});
 	}
 
@@ -324,6 +335,24 @@ public class DiscordWebhookClient
 			return null;
 		}
 		return url;
+	}
+
+	static List<HttpUrl> parseDiscordWebhookUrls(String webhookUrls)
+	{
+		if (webhookUrls == null || webhookUrls.trim().isEmpty())
+		{
+			return Collections.emptyList();
+		}
+		Set<HttpUrl> urls = new LinkedHashSet<>();
+		for (String candidate : webhookUrls.split("[,\\r\\n]+"))
+		{
+			HttpUrl url = parseDiscordWebhookUrl(candidate);
+			if (url != null)
+			{
+				urls.add(url);
+			}
+		}
+		return new ArrayList<>(urls);
 	}
 
 	static HttpUrl wikiLookupUrl(String monster, boolean search)

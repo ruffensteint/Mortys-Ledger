@@ -28,6 +28,17 @@ public class DiscordWebhookClientTest
 	}
 
 	@Test
+	public void parsesMultipleUniqueWebhookUrls()
+	{
+		String first = "https://discord.com/api/webhooks/123/first";
+		String second = "https://discord.com/api/webhooks/456/second";
+		assertEquals(2, DiscordWebhookClient.parseDiscordWebhookUrls(
+			first + ", " + second + "\n" + first).size());
+		assertEquals(first, DiscordWebhookClient.parseDiscordWebhookUrls(
+			first + ", https://example.com/not-discord").get(0).toString());
+	}
+
+	@Test
 	public void buildsDirectAndSearchWikiQueries()
 	{
 		assertEquals("Dark Beasts",

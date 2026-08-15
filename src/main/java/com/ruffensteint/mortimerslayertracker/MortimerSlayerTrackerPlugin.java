@@ -152,6 +152,11 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 	public void onConfigChanged(ConfigChanged event)
 	{
 		if (MortimerSlayerTrackerConfig.GROUP.equals(event.getGroup())
+			&& MortimerSlayerTrackerConfig.WIKI_THUMBNAILS_ENABLED_KEY.equals(event.getKey()))
+		{
+			refreshPanel();
+		}
+		if (MortimerSlayerTrackerConfig.GROUP.equals(event.getGroup())
 			&& MortimerSlayerTrackerConfig.DISCORD_WEBHOOK_ENABLED_KEY.equals(event.getKey())
 			&& config.discordWebhookEnabled()
 			&& historyReady
@@ -338,7 +343,7 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 			.panel(panel)
 			.build();
 		clientToolbar.addNavigation(navigationButton);
-		panel.updateHistory(history);
+		panel.updateHistory(history, config.wikiThumbnailsEnabled());
 	}
 
 	private BufferedImage loadPanelIcon()
@@ -362,7 +367,7 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 		MortimerSlayerTrackerPanel currentPanel = panel;
 		if (currentPanel != null)
 		{
-			currentPanel.updateHistory(history);
+			currentPanel.updateHistory(history, config.wikiThumbnailsEnabled());
 		}
 	}
 

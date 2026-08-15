@@ -14,6 +14,7 @@ publishing task announcements to Discord.
 - Optionally posts new-task and completion embeds to Discord.
 - Includes the character name and an automatically resolved OSRS Wiki monster
   thumbnail in Discord posts.
+- Optionally downloads OSRS Wiki monster thumbnails for local history cards.
 - Supports customizable new-task and completion announcement titles.
 
 ## Discord Webhook Setup
@@ -24,18 +25,27 @@ Discord integration is disabled by default.
 2. Select **Integrations**, then **Webhooks**.
 3. Create a webhook, choose its name and avatar, and copy its webhook URL.
 4. In RuneLite, open **Configuration** and select **Morty's Ledger**.
-5. Paste the URL into **Discord webhook URL**.
+5. Paste one or more URLs into **Discord webhook URLs**. Separate multiple URLs
+   with commas.
 6. Optionally customize **New task title** and **Completed task title**.
 7. Enable **Discord webhook** and accept RuneLite's third-party warning.
 
 Enabling the webhook immediately posts the currently active task, when one is
-available. The plugin uses the webhook's configured Discord name and avatar.
-It posts task data only to the supplied Discord webhook. Monster thumbnails are
+available. The plugin uses each webhook's configured Discord name and avatar.
+It posts task data only to the supplied Discord webhooks. Monster thumbnails are
 resolved and downloaded from the OSRS Wiki, then attached to the Discord post.
 Both services will see the source IP address of their respective HTTPS requests.
 
 If a thumbnail cannot be resolved or downloaded, the text announcement is still
 sent normally.
+
+## Wiki Thumbnails
+
+History-card thumbnails are disabled by default. To enable them, open Morty's
+Ledger settings, enable **Wiki thumbnails**, and accept RuneLite's third-party
+warning. This makes HTTPS requests to the OSRS Wiki, which exposes your IP
+address to that service. Disabling the setting prevents the local history panel
+from requesting Wiki images; cards and locally stored history continue to work.
 
 ## Local History
 
