@@ -12,8 +12,8 @@ publishing task announcements to Discord.
 - Counts clue-scroll drops only when the assignment has a clue modifier.
 - Stores task history in `.runelite/mortimer-slayer-tracker/task-history.json`.
 - Optionally posts new-task and completion embeds to Discord.
-- Includes the character name and an automatically resolved OSRS Wiki monster
-  thumbnail in Discord posts.
+- Includes an automatically resolved OSRS Wiki monster thumbnail in Discord
+  posts without transmitting the character name.
 - Optionally downloads OSRS Wiki monster thumbnails for local history cards.
 - Supports customizable new-task and completion announcement titles.
 

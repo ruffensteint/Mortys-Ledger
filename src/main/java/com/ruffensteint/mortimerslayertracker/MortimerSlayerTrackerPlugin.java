@@ -163,7 +163,7 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 			&& history.getActiveTask() != null)
 		{
 			discordWebhookClient.sendTaskStarted(
-				config.discordWebhookUrl(), config.discordNewTaskTitle(), getPlayerName(), history.getActiveTask());
+				config.discordWebhookUrl(), config.discordNewTaskTitle(), history.getActiveTask());
 		}
 	}
 
@@ -217,7 +217,6 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 				discordWebhookClient.sendTaskCompleted(
 					config.discordWebhookUrl(),
 					config.discordCompletedTaskTitle(),
-					getPlayerName(),
 					history.getTasks().get(history.getTasks().size() - 1));
 			}
 		}
@@ -319,18 +318,13 @@ public class MortimerSlayerTrackerPlugin extends Plugin
 			if (config.discordWebhookEnabled())
 			{
 				discordWebhookClient.sendTaskStarted(
-					config.discordWebhookUrl(), config.discordNewTaskTitle(), getPlayerName(), history.getActiveTask());
+					config.discordWebhookUrl(), config.discordNewTaskTitle(), history.getActiveTask());
 			}
 			log.debug("Started Mortimer assignment #{}: {} x{}",
 				history.getMortimerTaskCount() + 1,
 				assignment.get().getMonster(),
 				assignment.get().getAssignedAmount());
 		}
-	}
-
-	private String getPlayerName()
-	{
-		return client.getLocalPlayer() == null ? null : client.getLocalPlayer().getName();
 	}
 
 	private void initializePanel()

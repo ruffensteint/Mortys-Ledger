@@ -53,10 +53,9 @@ public class DiscordWebhookClient
 		this.gson = gson;
 	}
 
-	public void sendTaskStarted(String webhookUrl, String title, String playerName, SlayerTaskRecord task)
+	public void sendTaskStarted(String webhookUrl, String title, SlayerTaskRecord task)
 	{
 		List<Field> fields = new ArrayList<>();
-		fields.add(new Field("Slayer", safe(playerName), false));
 		fields.add(new Field("Task", "#" + task.getTaskNumber(), true));
 		fields.add(new Field("Monster", safe(task.getMonster()), true));
 		fields.add(new Field("Amount", Integer.toString(task.getAssignedAmount()), true));
@@ -67,10 +66,9 @@ public class DiscordWebhookClient
 			task.getMonster());
 	}
 
-	public void sendTaskCompleted(String webhookUrl, String title, String playerName, SlayerTaskRecord task)
+	public void sendTaskCompleted(String webhookUrl, String title, SlayerTaskRecord task)
 	{
 		List<Field> fields = new ArrayList<>();
-		fields.add(new Field("Slayer", safe(playerName), false));
 		fields.add(new Field("Task", "#" + task.getTaskNumber() + " - " + safe(task.getMonster()), false));
 		fields.add(new Field("Slayer XP", task.getBaseSlayerXp() + " base (+" + task.getBonusSlayerXp() + " bonus)", false));
 		fields.add(new Field("Superiors", Integer.toString(task.getSuperiorCount()), true));
